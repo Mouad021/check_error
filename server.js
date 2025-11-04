@@ -1,50 +1,61 @@
-// BLS LoginSubmit checker (no password) — polls every N seconds
-// - GET /MAR/account/Login  => parse inputs (names/values + __RequestVerificationToken/Id/ReturnUrl)
-// - Build payload using page values AS-IS, except only the email field is set to EMAIL
-// - POST /MAR/account/LoginSubmit (x-www-form-urlencoded), no redirects
-// - Log: HTTP status + Location + the exact payload we sent (to verify it matches your sample)
+// server.js  (403-hardened)
+// Polls LoginSubmit every N seconds using page values (no password), with warm-up, real browser headers, optional proxy.
 
 const express = require('express');
 const axios = require('axios').default;
 const cheerio = require('cheerio');
 const { CookieJar } = require('tough-cookie');
 const qs = require('qs');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const PORT = process.env.PORT || 10000;
 const BASE = process.env.BLS_BASE || 'https://www.blsspainmorocco.net';
 const LOGIN_PATH = '/MAR/account/Login';
+const HOME_PATH = '/MAR/home/index';
 const SUBMIT_PATH = '/MAR/account/LoginSubmit';
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 5000);
-
-// الإيميل الوحيد الذي سنملأه في الطلب (بدون باسوورد)
 const EMAIL = process.env.LOGIN_EMAIL || 'jamalfahal6@gmail.com';
 
-// ============ axios + CookieJar (لا نتبع 302) ============
+// اختياري: بروكسي سكني/روتيتنج بصيغة http://user:pass@host:port أو socks5://...
+const PROXY_URL = process.env.PROXY_URL || '';
+
+function makeHeaders(referer = BASE) {
+  return {
+    'authority': new URL(BASE).host,
+    'pragma': 'no-cache',
+    'cache-control': 'no-cache',
+    'upgrade-insecure-requests': '1',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'sec-fetch-site': 'same-origin',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-user': '?1',
+    'sec-fetch-dest': 'document',
+    'accept-language': 'ar-MA,ar;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5',
+    'referer': referer
+  };
+}
+
 function createClient() {
   const jar = new CookieJar();
-  const http = axios.create({
+  const common = {
     baseURL: BASE,
-    maxRedirects: 0,                // لا تتبع 302
-    validateStatus: () => true,     // خليه يرجع الاستجابة كما هي
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Cache-Control': 'no-cache'
-    },
-    jar
-  });
+    maxRedirects: 0,
+    validateStatus: () => true,
+    headers: makeHeaders()
+  };
+  if (PROXY_URL) {
+    common.httpsAgent = new HttpsProxyAgent(PROXY_URL);
+  }
+  const http = axios.create(common);
 
-  // attach cookies before each request
+  // attach cookies
   http.interceptors.request.use(async (config) => {
     const cookieString = await jar.getCookieString(config.baseURL + (config.url || ''));
-    config.headers = config.headers || {};
-    config.headers['Cookie'] = cookieString;
+    config.headers = { ...(config.headers || {}), Cookie: cookieString };
     return config;
   });
-
-  // update jar from each response
+  // set cookies
   http.interceptors.response.use(async (res) => {
     const setCookie = res.headers['set-cookie'];
     if (setCookie && setCookie.length) {
@@ -58,16 +69,18 @@ function createClient() {
   return { http, jar };
 }
 
-// ============ Helpers ============
-async function fetchLogin(http) {
-  const res = await http.get(LOGIN_PATH, {
-    headers: { Referer: BASE + '/MAR/home/index' }
-  });
-  if (!res || res.status !== 200 || !res.data) {
-    throw new Error(`GET ${LOGIN_PATH} failed: HTTP ${res && res.status}`);
-  }
-  return res.data;
+// تسخين الجلسة لتقليل 403
+async function warmUp(http) {
+  const s1 = await http.get('/', { headers: makeHeaders() });
+  // تجاهل الحالة هنا؛ بعض الحمايات ترجع 200/302
+  await sleep(300);
+  const s2 = await http.get(HOME_PATH, { headers: makeHeaders(BASE + '/') });
+  await sleep(300);
+  const s3 = await http.get(LOGIN_PATH, { headers: makeHeaders(BASE + HOME_PATH) });
+  return s3;
 }
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function extractInputs(html) {
   const $ = cheerio.load(html);
@@ -84,15 +97,8 @@ function extractInputs(html) {
 }
 
 function findEmailField(inputs, $html) {
-  // 1) type=email
-  for (const [k, v] of Object.entries(inputs)) {
-    if (v.type === 'email') return k;
-  }
-  // 2) name contains email
-  for (const [k] of Object.entries(inputs)) {
-    if (/email/i.test(k)) return k;
-  }
-  // 3) label[for] يشير لحقل
+  for (const [k, v] of Object.entries(inputs)) if (v.type === 'email') return k;
+  for (const [k] of Object.entries(inputs)) if (/email/i.test(k)) return k;
   if ($html) {
     const $ = $html;
     let emailName = null;
@@ -115,85 +121,68 @@ function buildPayloadFromPage(html, emailValue) {
   const $ = cheerio.load(html);
   const inputs = extractInputs(html);
   const payload = {};
-
-  // املأ كل الحقول بالقيم الموجودة في الصفحة (كما هي)
-  for (const [name, meta] of Object.entries(inputs)) {
-    payload[name] = meta.value || '';
-  }
-
-  // تعرّف على اسم حقل الإيميل وعدّله فقط
+  for (const [name, meta] of Object.entries(inputs)) payload[name] = meta.value || '';
   const emailName = findEmailField(inputs, $);
-  if (emailName) {
-    payload[emailName] = emailValue || '';
-  }
-
+  if (emailName) payload[emailName] = emailValue || '';
   return { payload, emailName };
 }
 
 async function postLoginSubmit(http, payload) {
   const body = qs.stringify(payload);
-  const res = await http.post(SUBMIT_PATH, body, {
+  return await http.post(SUBMIT_PATH, body, {
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Origin': BASE,
-      'Referer': BASE + LOGIN_PATH
+      ...makeHeaders(BASE + LOGIN_PATH),
+      'content-type': 'application/x-www-form-urlencoded'
     }
   });
-  return res;
 }
 
-// ============ Poll logic ============
 async function pollOnce() {
-  try {
-    const startedAt = new Date().toISOString();
-    const { http } = createClient();
+  const { http } = createClient();
+  // محاولتان: تسخين + إعادة
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const warm = await warmUp(http);
+      if (warm.status !== 200 || !warm.data) throw new Error(`Login warmup failed: HTTP ${warm.status}`);
 
-    // 1) GET login and parse all inputs (tokens + randomized names)
-    const html = await fetchLogin(http);
+      const { payload, emailName } = buildPayloadFromPage(warm.data, EMAIL);
+      const res = await postLoginSubmit(http, payload);
+      const is302 = res.status >= 300 && res.status < 400;
+      const location = res.headers['location'] || null;
+      const isErrorLike =
+        (location && (/\/Home\/Error\?/i.test(location) || /\/account\/login\?err=/i.test(location)));
 
-    // 2) payload = page values AS-IS (only override the email field)
-    const { payload, emailName } = buildPayloadFromPage(html, EMAIL);
-
-    // 3) POST LoginSubmit (no redirect following)
-    const res = await postLoginSubmit(http, payload);
-    const is302 = res.status >= 300 && res.status < 400;
-    const location = res.headers['location'] || null;
-
-    // 4) consider error-like redirects (/Home/Error? or /account/Login?err=)
-    const isErrorLike =
-      (location && (/\/Home\/Error\?/i.test(location) || /\/account\/login\?err=/i.test(location)));
-
-    // 5) logging (payload preview similar to your sample)
-    console.log('====== BLS LoginSubmit check ======');
-    console.log('StartedAt   :', startedAt);
-    console.log('POST Status :', res.status, is302 ? '(302 Found)' : '');
-    console.log('Location    :', location);
-    console.log('Email field :', emailName || '(not found)');
-    console.log('Payload sent:', payload); // ستراه بالشكل الذي تريد (أسماء عشوائية + التوكنات)
-    console.log('Error-like  :', !!isErrorLike);
-    console.log('===================================');
-
-  } catch (err) {
-    console.error('[poll error]', err && err.message ? err.message : err);
+      console.log('====== BLS LoginSubmit check ======');
+      console.log('Attempt     :', attempt);
+      console.log('GET(Login)  :', warm.status);
+      console.log('POST Status :', res.status, is302 ? '(302 Found)' : '');
+      console.log('Location    :', location);
+      console.log('Email field :', emailName || '(not found)');
+      console.log('Error-like  :', !!isErrorLike);
+      console.log('Payload keys:', Object.keys(payload)); // تجنب طباعة القيم كاملة
+      console.log('===================================');
+      return; // نجاح المحاولة
+    } catch (e) {
+      console.warn(`[poll warn] attempt ${attempt} -> ${e.message || e}`);
+      if (attempt === 1) await sleep(800);
+    }
   }
+  console.error('[poll error] all attempts failed');
 }
 
-// run forever
 setInterval(pollOnce, POLL_INTERVAL_MS);
 
-// minimal http just to know it’s running
+// Minimal HTTP
 const app = express();
-app.get('/', (req, res) => res.send('BLS LoginSubmit checker running ✅'));
-app.get('/once', async (req, res) => {
-  try {
-    await pollOnce();
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e.message || e) });
-  }
+app.get('/', (_req, res) => res.send('BLS LoginSubmit checker running ✅'));
+app.get('/once', async (_req, res) => {
+  try { await pollOnce(); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ ok: false, error: String(e.message || e) }); }
 });
+
 app.listen(PORT, () => {
   console.log(`✅ Server listening on ${PORT}`);
   console.log(`⏱️ Poll every ${POLL_INTERVAL_MS} ms`);
-  console.log(`📧 EMAIL used for the email field: ${EMAIL}`);
+  console.log(`📧 EMAIL used: ${EMAIL}`);
+  if (PROXY_URL) console.log(`🌐 PROXY in use`);
 });
