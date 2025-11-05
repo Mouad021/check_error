@@ -5,11 +5,8 @@ import { WebSocketServer } from "ws";
 
 const PORT = process.env.PORT || 4600;
 
-// اختيارياً: حصر الأورجينات المسموح بها (اتركه [] للسماح للجميع)
-const ALLOWED_ORIGINS = [
-  "https://www.blsspainmorocco.net",
-  "https://morocco.blsportugal.com"
-];
+// اسمح لجميع الأورجينات (يمكنك تخصيصها لاحقاً)
+const ALLOWED_ORIGINS = [];
 
 const app = express();
 app.use(cors());
@@ -17,11 +14,13 @@ app.get("/", (req, res) => res.send("MILANO check server up"));
 app.get("/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, perMessageDeflate: false });
+const wss = new WebSocketServer({
+  server,
+  perMessageDeflate: false
+});
 
-// rooms: key = origin (مثلاً https://www.blsspainmorocco.net)
-const rooms = new Map();                  // roomOrigin -> Set(ws)
-const pendingAggregations = new Map();    // checkId -> { room, deadline, results[] }
+const rooms = new Map();                  
+const pendingAggregations = new Map();    
 
 function now(){ return Date.now(); }
 
@@ -64,7 +63,6 @@ wss.on("connection", (ws) => {
     let msg;
     try { msg = JSON.parse(buf.toString()); } catch { return; }
 
-    // {type:"hello", room:"https://www.blsspainmorocco.net"}
     if (msg.type === "hello" && typeof msg.room === "string") {
       joinRoom(ws, msg.room);
       if (ws.__room) {
@@ -73,7 +71,6 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // {type:"check_request", checkId?, url?, timeoutMs?}
     if (msg.type === "check_request" && ws.__room) {
       const room = ws.__room;
       const checkId = msg.checkId || Math.random().toString(36).slice(2) + now();
@@ -107,7 +104,6 @@ wss.on("connection", (ws) => {
         let majority = "ERROR";
         if (ok >= fail && ok >= err) majority = "TRUE";
         else if (fail > ok && fail >= err) majority = "FALSE";
-        else majority = "ERROR";
 
         broadcast(agg.room, {
           type: "check_result",
@@ -123,13 +119,12 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // {type:"check_result_part", checkId, from, status, detail}
     if (msg.type === "check_result_part" && msg.checkId) {
       const agg = pendingAggregations.get(msg.checkId);
       if (!agg) return;
       agg.results.push({
         from: msg.from || "unknown",
-        status: msg.status,      // "OK"|"FAIL"|"ERROR"
+        status: msg.status,
         detail: msg.detail || {}
       });
       return;
@@ -139,14 +134,16 @@ wss.on("connection", (ws) => {
   ws.on("close", () => leaveRoom(ws));
 });
 
-// keep-alive للحفاظ على 150+ اتصال نشط
+/* ===========================
+   ✅ PING / PONG كل 5 ثواني
+   =========================== */
 setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) { try { ws.terminate(); } catch {} continue; }
     ws.isAlive = false;
     try { ws.ping(); } catch {}
   }
-}, 15000);
+}, 5000);
 
 server.listen(PORT, () => {
   console.log("MILANO check server listening on :" + PORT);
