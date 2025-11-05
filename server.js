@@ -4,9 +4,7 @@ import cors from "cors";
 import { WebSocketServer } from "ws";
 
 const PORT = process.env.PORT || 4600;
-
-// اسمح للجميع؛ غيّرها إذا أردت تقييد origins
-const ALLOWED_ORIGINS = [];
+const ALLOWED_ORIGINS = []; // اسمح للجميع
 
 const app = express();
 app.use(cors());
@@ -16,7 +14,7 @@ app.get("/health", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, perMessageDeflate: false });
 
-const rooms = new Map();               // roomOrigin -> Set(ws)
+const rooms = new Map();               // origin -> Set(ws)
 const pendingAggregations = new Map(); // checkId -> { room, deadline, results[] }
 
 function now(){ return Date.now(); }
@@ -58,7 +56,6 @@ wss.on("connection", (ws) => {
     let msg;
     try { msg = JSON.parse(buf.toString()); } catch { return; }
 
-    // {type:"hello", room:"https://www.blsspainmorocco.net"}
     if (msg.type === "hello" && typeof msg.room === "string") {
       joinRoom(ws, msg.room);
       if (ws.__room) {
@@ -67,11 +64,10 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // {type:"check_request", checkId?, url?, timeoutMs?}
     if (msg.type === "check_request" && ws.__room) {
       const room = ws.__room;
       const checkId = msg.checkId || Math.random().toString(36).slice(2) + now();
-      const timeoutMs = Math.min(Math.max(+msg.timeoutMs || 2500, 1000), 8000);
+      const timeoutMs = Math.min(Math.max(+msg.timeoutMs || 900, 300), 5000); // أقصر لتسريع الإعلان
 
       pendingAggregations.set(checkId, { room, deadline: now() + timeoutMs, results: [] });
 
@@ -86,7 +82,6 @@ wss.on("connection", (ws) => {
         const agg = pendingAggregations.get(checkId);
         if (!agg) return;
 
-        // فقط احسب OK و ERROR، وتجاهل IGNORE
         let ok = 0, err = 0;
         for (const r of agg.results) {
           if (r.status === "IGNORE") continue;
@@ -99,26 +94,43 @@ wss.on("connection", (ws) => {
         broadcast(agg.room, {
           type: "check_result",
           checkId,
-          majority,                 // TRUE أو FALSE فقط
-          tally: { ok, err, total },// عدّاد مجمّع
-          received: agg.results
+          majority,
+          tally: { ok, err, total }
         });
 
         pendingAggregations.delete(checkId);
-      }, timeoutMs + 50);
+      }, timeoutMs + 10);
 
       return;
     }
 
-    // {type:"check_result_part", checkId, from, status("OK"|"ERROR"|"IGNORE"), detail}
+    // وصول جزء نتيجة من عميل ما -> أبثّ تقدم لحظي
     if (msg.type === "check_result_part" && msg.checkId) {
       const agg = pendingAggregations.get(msg.checkId);
       if (!agg) return;
       agg.results.push({
         from: msg.from || "unknown",
-        status: msg.status,
+        status: msg.status, // "OK" | "ERROR" | "IGNORE"
         detail: msg.detail || {}
       });
+
+      // بث فوري للتقدّم (majority لحظي)
+      let ok = 0, err = 0;
+      for (const r of agg.results) {
+        if (r.status === "IGNORE") continue;
+        if (r.status === "OK") ok++;
+        else if (r.status === "ERROR") err++;
+      }
+      const total = ok + err;
+      if (total >= 1) {
+        const majority = (ok >= err) ? "TRUE" : "FALSE";
+        broadcast(agg.room, {
+          type: "check_progress",
+          checkId: msg.checkId,
+          majority,
+          tally: { ok, err, total }
+        });
+      }
       return;
     }
   });
