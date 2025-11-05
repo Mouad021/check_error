@@ -5,22 +5,19 @@ import { WebSocketServer } from "ws";
 
 const PORT = process.env.PORT || 4600;
 
-// اسمح لجميع الأورجينات (يمكنك تخصيصها لاحقاً)
+// اسمح للجميع؛ غيّرها إذا أردت تقييد origins
 const ALLOWED_ORIGINS = [];
 
 const app = express();
 app.use(cors());
-app.get("/", (req, res) => res.send("MILANO check server up"));
-app.get("/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
+app.get("/", (_req, res) => res.send("MILANO check server up"));
+app.get("/health", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({
-  server,
-  perMessageDeflate: false
-});
+const wss = new WebSocketServer({ server, perMessageDeflate: false });
 
-const rooms = new Map();                  
-const pendingAggregations = new Map();    
+const rooms = new Map();               // roomOrigin -> Set(ws)
+const pendingAggregations = new Map(); // checkId -> { room, deadline, results[] }
 
 function now(){ return Date.now(); }
 
@@ -34,7 +31,6 @@ function joinRoom(ws, room) {
   rooms.get(room).add(ws);
   ws.__room = room;
 }
-
 function leaveRoom(ws) {
   const r = ws.__room;
   if (!r) return;
@@ -43,7 +39,6 @@ function leaveRoom(ws) {
   s.delete(ws);
   if (!s.size) rooms.delete(r);
 }
-
 function broadcast(room, obj) {
   const s = rooms.get(room);
   if (!s) return;
@@ -63,6 +58,7 @@ wss.on("connection", (ws) => {
     let msg;
     try { msg = JSON.parse(buf.toString()); } catch { return; }
 
+    // {type:"hello", room:"https://www.blsspainmorocco.net"}
     if (msg.type === "hello" && typeof msg.room === "string") {
       joinRoom(ws, msg.room);
       if (ws.__room) {
@@ -71,16 +67,13 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // {type:"check_request", checkId?, url?, timeoutMs?}
     if (msg.type === "check_request" && ws.__room) {
       const room = ws.__room;
       const checkId = msg.checkId || Math.random().toString(36).slice(2) + now();
-      const timeoutMs = Math.min(Math.max(+msg.timeoutMs || 2000, 1000), 8000);
+      const timeoutMs = Math.min(Math.max(+msg.timeoutMs || 2500, 1000), 8000);
 
-      pendingAggregations.set(checkId, {
-        room,
-        deadline: now() + timeoutMs,
-        results: []
-      });
+      pendingAggregations.set(checkId, { room, deadline: now() + timeoutMs, results: [] });
 
       broadcast(room, {
         type: "run_checks",
@@ -92,25 +85,23 @@ wss.on("connection", (ws) => {
       setTimeout(() => {
         const agg = pendingAggregations.get(checkId);
         if (!agg) return;
-        const results = agg.results;
 
-        let ok = 0, fail = 0, err = 0;
-        for (const r of results) {
+        // فقط احسب OK و ERROR، وتجاهل IGNORE
+        let ok = 0, err = 0;
+        for (const r of agg.results) {
+          if (r.status === "IGNORE") continue;
           if (r.status === "OK") ok++;
-          else if (r.status === "FAIL") fail++;
-          else err++;
+          else if (r.status === "ERROR") err++;
         }
-
-        let majority = "ERROR";
-        if (ok >= fail && ok >= err) majority = "TRUE";
-        else if (fail > ok && fail >= err) majority = "FALSE";
+        const total = ok + err;
+        const majority = (ok >= err) ? "TRUE" : "FALSE";
 
         broadcast(agg.room, {
           type: "check_result",
           checkId,
-          majority,
-          tally: { ok, fail, err, total: ok + fail + err },
-          received: results
+          majority,                 // TRUE أو FALSE فقط
+          tally: { ok, err, total },// عدّاد مجمّع
+          received: agg.results
         });
 
         pendingAggregations.delete(checkId);
@@ -119,6 +110,7 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // {type:"check_result_part", checkId, from, status("OK"|"ERROR"|"IGNORE"), detail}
     if (msg.type === "check_result_part" && msg.checkId) {
       const agg = pendingAggregations.get(msg.checkId);
       if (!agg) return;
@@ -134,9 +126,7 @@ wss.on("connection", (ws) => {
   ws.on("close", () => leaveRoom(ws));
 });
 
-/* ===========================
-   ✅ PING / PONG كل 5 ثواني
-   =========================== */
+/* Ping/Pong كل 5 ثوانٍ */
 setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) { try { ws.terminate(); } catch {} continue; }
