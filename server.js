@@ -5,22 +5,32 @@ import { WebSocketServer } from "ws";
 
 const PORT = process.env.PORT || 4600;
 
+// اختيارياً: حصر الأورجينات المسموح بها (اتركه [] للسماح للجميع)
+const ALLOWED_ORIGINS = [
+  "https://www.blsspainmorocco.net",
+  "https://morocco.blsportugal.com"
+];
+
 const app = express();
 app.use(cors());
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/", (req, res) => res.send("MILANO check server up"));
+app.get("/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({
-  server,
-  // تعطيل الضغط لتقليل الحمل مع 150+ سوكِت
-  perMessageDeflate: false
-});
+const wss = new WebSocketServer({ server, perMessageDeflate: false });
 
-// room = origin (مثل https://www.blsspainmorocco.net)
-const rooms = new Map(); // room -> Set(ws)
-const pendingAggregations = new Map(); // checkId -> { room, deadline, results[] }
+// rooms: key = origin (مثلاً https://www.blsspainmorocco.net)
+const rooms = new Map();                  // roomOrigin -> Set(ws)
+const pendingAggregations = new Map();    // checkId -> { room, deadline, results[] }
+
+function now(){ return Date.now(); }
 
 function joinRoom(ws, room) {
+  if (ALLOWED_ORIGINS.length && !ALLOWED_ORIGINS.includes(room)) {
+    try { ws.send(JSON.stringify({ type: "error", reason: "origin_not_allowed" })); } catch {}
+    try { ws.close(); } catch {}
+    return;
+  }
   if (!rooms.has(room)) rooms.set(room, new Set());
   rooms.get(room).add(ws);
   ws.__room = room;
@@ -28,24 +38,23 @@ function joinRoom(ws, room) {
 
 function leaveRoom(ws) {
   const r = ws.__room;
-  if (r && rooms.has(r)) {
-    rooms.get(r).delete(ws);
-    if (rooms.get(r).size === 0) rooms.delete(r);
-  }
+  if (!r) return;
+  const s = rooms.get(r);
+  if (!s) return;
+  s.delete(ws);
+  if (!s.size) rooms.delete(r);
 }
 
-function broadcast(room, dataObj) {
+function broadcast(room, obj) {
   const s = rooms.get(room);
   if (!s) return;
-  const msg = JSON.stringify(dataObj);
+  const msg = JSON.stringify(obj);
   for (const ws of s) {
     if (ws.readyState === ws.OPEN) {
       try { ws.send(msg); } catch {}
     }
   }
 }
-
-function now() { return Date.now(); }
 
 wss.on("connection", (ws) => {
   ws.isAlive = true;
@@ -58,22 +67,24 @@ wss.on("connection", (ws) => {
     // {type:"hello", room:"https://www.blsspainmorocco.net"}
     if (msg.type === "hello" && typeof msg.room === "string") {
       joinRoom(ws, msg.room);
-      ws.send(JSON.stringify({ type: "hello_ack", room: msg.room }));
+      if (ws.__room) {
+        try { ws.send(JSON.stringify({ type: "hello_ack", room: ws.__room })); } catch {}
+      }
       return;
     }
 
-    // {type:"check_request", checkId, url, who:"clientId", timeoutMs?}
+    // {type:"check_request", checkId?, url?, timeoutMs?}
     if (msg.type === "check_request" && ws.__room) {
       const room = ws.__room;
       const checkId = msg.checkId || Math.random().toString(36).slice(2) + now();
       const timeoutMs = Math.min(Math.max(+msg.timeoutMs || 2000, 1000), 8000);
 
-      // افتح تجميع جديد
       pendingAggregations.set(checkId, {
-        room, deadline: now() + timeoutMs, results: []
+        room,
+        deadline: now() + timeoutMs,
+        results: []
       });
 
-      // اطلب من جميع العملاء في الغرفة أن ينفذوا الفحص
       broadcast(room, {
         type: "run_checks",
         checkId,
@@ -81,7 +92,6 @@ wss.on("connection", (ws) => {
         deadline: now() + timeoutMs
       });
 
-      // جدولة تجميع وإرجاع النتيجة
       setTimeout(() => {
         const agg = pendingAggregations.get(checkId);
         if (!agg) return;
@@ -93,19 +103,17 @@ wss.on("connection", (ws) => {
           else if (r.status === "FAIL") fail++;
           else err++;
         }
-        const total = ok + fail + err;
-        // حُكم الأغلبية
+
         let majority = "ERROR";
         if (ok >= fail && ok >= err) majority = "TRUE";
         else if (fail > ok && fail >= err) majority = "FALSE";
         else majority = "ERROR";
 
-        // أعد إلى الغرفة (سيستلمه الذي ضغط الزر وكل الآخرين)
-        broadcast(room, {
+        broadcast(agg.room, {
           type: "check_result",
           checkId,
           majority,
-          tally: { ok, fail, err, total },
+          tally: { ok, fail, err, total: ok + fail + err },
           received: results
         });
 
@@ -116,12 +124,12 @@ wss.on("connection", (ws) => {
     }
 
     // {type:"check_result_part", checkId, from, status, detail}
-    if (msg.type === "check_result_part" && msg.checkId && ws.__room) {
+    if (msg.type === "check_result_part" && msg.checkId) {
       const agg = pendingAggregations.get(msg.checkId);
       if (!agg) return;
       agg.results.push({
         from: msg.from || "unknown",
-        status: msg.status, // "OK" | "FAIL" | "ERROR"
+        status: msg.status,      // "OK"|"FAIL"|"ERROR"
         detail: msg.detail || {}
       });
       return;
@@ -131,7 +139,7 @@ wss.on("connection", (ws) => {
   ws.on("close", () => leaveRoom(ws));
 });
 
-// Ping للحفاظ على السوكِت حية
+// keep-alive للحفاظ على 150+ اتصال نشط
 setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) { try { ws.terminate(); } catch {} continue; }
@@ -141,5 +149,5 @@ setInterval(() => {
 }, 15000);
 
 server.listen(PORT, () => {
-  console.log(`MILANO check server listening on :${PORT}`);
+  console.log("MILANO check server listening on :" + PORT);
 });
