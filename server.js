@@ -5,7 +5,7 @@ import { WebSocketServer } from "ws";
 
 const PORT = process.env.PORT || 4600;
 const ALLOWED_ORIGINS = [];                 // اتركها فارغة للسماح للجميع
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "2006";
 const TOKENS_ENV = process.env.TOKENS || ""; // مثال: alpha|Team A,beta|Team B
 
 /* ====== تخزين التوكنات في الذاكرة ====== */
