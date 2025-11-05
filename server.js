@@ -1,105 +1,145 @@
-// MILANO Check-All (low-latency quorum + WS + BC-friendly)
-const express = require('express');
-const cors = require('cors');
-const http = require('http');
-const WebSocket = require('ws');
+import express from "express";
+import http from "http";
+import cors from "cors";
+import { WebSocketServer } from "ws";
 
-const PORT = process.env.PORT || 10000;
-const DEFAULT_TTL = 1200; // نافذة التجميع القصيرة (ms)
+const PORT = process.env.PORT || 4600;
 
 const app = express();
-app.use(cors({ origin: true }));
-app.get('/', (_, res) => res.send('MILANO Check-All (quorum) ✅'));
+app.use(cors());
+app.get("/health", (req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws' });
-
-// rooms: Map<roomId, Set<ws>>
-const rooms = new Map();
-// runs: Map<runId, { roomId, expected, ok, fail, deadline, timer }>
-const runs = new Map();
-
-const rid = () => 'run_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
-
-const getRoom = (roomId) => {
-  if (!rooms.has(roomId)) rooms.set(roomId, new Set());
-  return rooms.get(roomId);
-};
-
-const broadcastRoom = (roomId, obj) => {
-  const msg = JSON.stringify(obj);
-  const set = rooms.get(roomId);
-  if (!set) return;
-  for (const ws of set) if (ws.readyState === 1) ws.send(msg);
-};
-
-function finalize(runId) {
-  const r = runs.get(runId);
-  if (!r) return;
-  clearTimeout(r.timer);
-  const total = r.ok + r.fail;
-  const decision = total > 0 ? (r.ok > r.fail) : false; // أغلبية بسيطة
-  broadcastRoom(r.roomId, {
-    type: 'result',
-    roomId: r.roomId,
-    runId,
-    decision,
-    counts: { ok: r.ok, fail: r.fail, total, expected: r.expected }
-  });
-  runs.delete(runId);
-}
-
-function tryEarlyQuorum(r) {
-  const need = Math.floor(r.expected / 2) + 1;
-  if (r.ok >= need || r.fail >= need) finalize(r.runId);
-}
-
-function startRun(roomId, ttlMs = DEFAULT_TTL) {
-  const runId = rid();
-  const expected = getRoom(roomId).size; // عدد المتصلين لحظة الإطلاق
-  const timer = setTimeout(() => finalize(runId), ttlMs);
-  const run = { runId, roomId, expected, ok: 0, fail: 0, deadline: Date.now()+ttlMs, timer };
-  runs.set(runId, run);
-  broadcastRoom(roomId, { type: 'check', roomId, runId, deadlineTs: run.deadline, expected });
-}
-
-wss.on('connection', (ws, req) => {
-  try { ws._socket.setNoDelay(true); } catch {}
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const roomId = url.searchParams.get('room') || 'milano-room-1';
-  const set = getRoom(roomId);
-  set.add(ws);
-
-  ws.send(JSON.stringify({ type: 'hello', roomId, ttlDefault: DEFAULT_TTL, connected: set.size }));
-
-  ws.on('message', (buf) => {
-    let msg; try { msg = JSON.parse(buf); } catch { return; }
-    if (!msg || msg.roomId !== roomId) return;
-
-    if (msg.type === 'trigger') {
-      const ttlMs = Math.max(500, Math.min(5000, Number(msg.ttlMs) || DEFAULT_TTL));
-      startRun(roomId, ttlMs);
-      return;
-    }
-
-    if (msg.type === 'report') {
-      const r = runs.get(msg.runId);
-      if (!r || r.roomId !== roomId || Date.now() > r.deadline) return;
-      if (msg.ok) r.ok++; else r.fail++;
-      tryEarlyQuorum(r);
-      return;
-    }
-  });
-
-  ws.on('close', () => {
-    const s = rooms.get(roomId);
-    if (s) {
-      s.delete(ws);
-      if (s.size === 0) rooms.delete(roomId);
-    }
-  });
+const wss = new WebSocketServer({
+  server,
+  // تعطيل الضغط لتقليل الحمل مع 150+ سوكِت
+  perMessageDeflate: false
 });
 
+// room = origin (مثل https://www.blsspainmorocco.net)
+const rooms = new Map(); // room -> Set(ws)
+const pendingAggregations = new Map(); // checkId -> { room, deadline, results[] }
+
+function joinRoom(ws, room) {
+  if (!rooms.has(room)) rooms.set(room, new Set());
+  rooms.get(room).add(ws);
+  ws.__room = room;
+}
+
+function leaveRoom(ws) {
+  const r = ws.__room;
+  if (r && rooms.has(r)) {
+    rooms.get(r).delete(ws);
+    if (rooms.get(r).size === 0) rooms.delete(r);
+  }
+}
+
+function broadcast(room, dataObj) {
+  const s = rooms.get(room);
+  if (!s) return;
+  const msg = JSON.stringify(dataObj);
+  for (const ws of s) {
+    if (ws.readyState === ws.OPEN) {
+      try { ws.send(msg); } catch {}
+    }
+  }
+}
+
+function now() { return Date.now(); }
+
+wss.on("connection", (ws) => {
+  ws.isAlive = true;
+  ws.on("pong", () => (ws.isAlive = true));
+
+  ws.on("message", (buf) => {
+    let msg;
+    try { msg = JSON.parse(buf.toString()); } catch { return; }
+
+    // {type:"hello", room:"https://www.blsspainmorocco.net"}
+    if (msg.type === "hello" && typeof msg.room === "string") {
+      joinRoom(ws, msg.room);
+      ws.send(JSON.stringify({ type: "hello_ack", room: msg.room }));
+      return;
+    }
+
+    // {type:"check_request", checkId, url, who:"clientId", timeoutMs?}
+    if (msg.type === "check_request" && ws.__room) {
+      const room = ws.__room;
+      const checkId = msg.checkId || Math.random().toString(36).slice(2) + now();
+      const timeoutMs = Math.min(Math.max(+msg.timeoutMs || 2000, 1000), 8000);
+
+      // افتح تجميع جديد
+      pendingAggregations.set(checkId, {
+        room, deadline: now() + timeoutMs, results: []
+      });
+
+      // اطلب من جميع العملاء في الغرفة أن ينفذوا الفحص
+      broadcast(room, {
+        type: "run_checks",
+        checkId,
+        url: msg.url || null,
+        deadline: now() + timeoutMs
+      });
+
+      // جدولة تجميع وإرجاع النتيجة
+      setTimeout(() => {
+        const agg = pendingAggregations.get(checkId);
+        if (!agg) return;
+        const results = agg.results;
+
+        let ok = 0, fail = 0, err = 0;
+        for (const r of results) {
+          if (r.status === "OK") ok++;
+          else if (r.status === "FAIL") fail++;
+          else err++;
+        }
+        const total = ok + fail + err;
+        // حُكم الأغلبية
+        let majority = "ERROR";
+        if (ok >= fail && ok >= err) majority = "TRUE";
+        else if (fail > ok && fail >= err) majority = "FALSE";
+        else majority = "ERROR";
+
+        // أعد إلى الغرفة (سيستلمه الذي ضغط الزر وكل الآخرين)
+        broadcast(room, {
+          type: "check_result",
+          checkId,
+          majority,
+          tally: { ok, fail, err, total },
+          received: results
+        });
+
+        pendingAggregations.delete(checkId);
+      }, timeoutMs + 50);
+
+      return;
+    }
+
+    // {type:"check_result_part", checkId, from, status, detail}
+    if (msg.type === "check_result_part" && msg.checkId && ws.__room) {
+      const agg = pendingAggregations.get(msg.checkId);
+      if (!agg) return;
+      agg.results.push({
+        from: msg.from || "unknown",
+        status: msg.status, // "OK" | "FAIL" | "ERROR"
+        detail: msg.detail || {}
+      });
+      return;
+    }
+  });
+
+  ws.on("close", () => leaveRoom(ws));
+});
+
+// Ping للحفاظ على السوكِت حية
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!ws.isAlive) { try { ws.terminate(); } catch {} continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch {}
+  }
+}, 15000);
+
 server.listen(PORT, () => {
-  console.log(`✅ WS on :${PORT}/ws`);
+  console.log(`MILANO check server listening on :${PORT}`);
 });
