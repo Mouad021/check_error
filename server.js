@@ -1,3 +1,15 @@
+// MILANO Check / Super Submit Hub  – ESM version
+// Run locally:  NODE_OPTIONS=--experimental-modules  (if needed for older Node)
+// Install:      npm i express ws cors
+// Start:        node server.js
+//
+// Room model: roomKey = origin + "||" + token
+// Client flow:
+//   1) ws send: {type:"hello", room:"https://www.blsspainmorocco.net", token:"<TOKEN>"}
+//   2) ws send: {type:"super_submit"}  → broadcast to same roomKey
+// Optional HTTP trigger:
+//   POST /super_submit  { origin, token }  → broadcast super_submit to that room
+
 import express from "express";
 import http from "http";
 import cors from "cors";
@@ -9,8 +21,8 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-const PORT = process.env.PORT || 4600;
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "2006";
+const PORT          = process.env.PORT || 4600;
+const ADMIN_SECRET  = process.env.ADMIN_SECRET || "2006";
 // استخدم Persistent Disk على Render واضبط هذا المتغير:
 const TOKENS_DB_PATH = process.env.TOKENS_DB_PATH || path.join(__dirname, "tokens.json");
 
@@ -316,6 +328,17 @@ wss.on("connection", (ws) => {
       broadcast(ws.__roomKey, { type: "run_login_all" });
       return;
     }
+
+    /* ====== بث Super Submit (من عميل → نفس الغرفة) ====== */
+    // الإضافة تبعث: {type:"super_submit"}
+    if (msg.type === "super_submit") {
+      if (!ws.__roomKey) return; // لم ينضم عبر hello
+      // (اختياري) لو تضمّنت الرسالة token، تأكد من التطابق مع جلسة ws:
+      if (typeof msg.token === "string" && msg.token !== ws.__token) return;
+      // أعِد البث لكل العملاء في نفس origin||token
+      broadcast(ws.__roomKey, { type: "super_submit", token: ws.__token });
+      return;
+    }
   });
 
   ws.on("close", () => leaveRoom(ws));
@@ -331,8 +354,21 @@ setInterval(() => {
 }, 5000);
 
 process.on("SIGTERM", saveTokensToDisk);
-process.on("SIGINT", saveTokensToDisk);
+process.on("SIGINT",  saveTokensToDisk);
 
 server.listen(PORT, () => {
   console.log("MILANO check server listening on :" + PORT);
+});
+
+/* ====== HTTP super_submit (اختياري للاختبار اليدوي) ==================== */
+// أطلق بث super_submit يدويًا عبر HTTP:
+// curl -X POST http://localhost:4600/super_submit -H "content-type: application/json" \
+//      -d '{"origin":"https://www.blsspainmorocco.net","token":"YOUR_TOKEN"}'
+app.post("/super_submit", (req, res) => {
+  const origin = typeof req.body?.origin === "string" ? req.body.origin : null;
+  const token  = typeof req.body?.token  === "string" ? req.body.token  : null;
+  if (!origin || !token) return res.status(400).json({ ok:false, error:"origin and token required" });
+  const key = origin + "||" + token;
+  broadcast(key, { type: "super_submit", token });
+  res.json({ ok: true, origin, token });
 });
