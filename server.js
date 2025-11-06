@@ -315,6 +315,34 @@ wss.on("connection", (ws) => {
       }
       return;
     }
+
+    /* ====== NEW: بث أمر LOGIN ALL ======
+       من المتصفح الضاغط → إلى بقية المتصفحات.
+       - افتراضيًا: إلى نفس الغرفة (origin + token)
+       - إن أرسل token = "ALL": إلى كل الغرف على نفس origin
+    */
+    if (msg.type === "run_login_all") {
+      // لا نقبل بدون غرفة مؤكدة
+      if (!ws.__origin) return;
+
+      // هدف افتراضي: نفس الغرفة
+      const currentRoomKey = ws.__roomKey;
+
+      // إن كانت "ALL" → كل الغرف على نفس الـ origin
+      if (msg.token === "ALL") {
+        for (const [key] of rooms) {
+          if (key.startsWith(ws.__origin + "||")) {
+            broadcast(key, { type: "run_login_all", token: "ALL" });
+          }
+        }
+      } else {
+        // حصر البث على الغرفة الحالية (تحاشيًا للتلاعب)
+        if (currentRoomKey) {
+          broadcast(currentRoomKey, { type: "run_login_all", token: ws.__token });
+        }
+      }
+      return;
+    }
   });
 
   ws.on("close", () => leaveRoom(ws));
