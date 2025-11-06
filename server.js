@@ -84,23 +84,105 @@ app.get("/admin", (_req, res) => {
 <meta charset="utf-8"><title>MILANO Check – Token Admin</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1320;color:#e5e7eb;margin:0;padding:24px;}
-  .wrap{max-width:880px;margin:0 auto}
-  h1{margin:0 0 16px;font-size:22px}
-  .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
-  .row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
-  input,button{font-size:14px}
-  input[type=text]{background:#0b1220;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:10px 12px;min-width:200px}
-  button{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;color:#fff;background:#2563eb}
-  button.danger{background:#dc2626}
-  button.gray{background:#6b7280}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  th,td{border-bottom:1px solid #1f2937;padding:10px;text-align:left;font-size:13px}
-  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
-  .ok{background:#065f46}
-  .off{background:#7c2d12}
-  .hint{color:#9ca3af;font-size:12px;margin-top:10px}
-  .secret{margin-left:auto}
+/* ====== Modern Cyber Minimal — style only, no DOM/JS changes ====== */
+:root{
+  --bg:#090e18; --card:#0d1425; --ink:#e7eef7; --muted:#9fb3ce;
+  --bdr:#1b2a46; --primary:#6fe6ff; --accent:#1b5ad9; --accent2:#0f3fb5;
+  --ok:#00e6b8; --danger:#ff3b66; --shadow:0 12px 50px rgba(0,0,0,.45);
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; padding:24px;
+  font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(1200px 700px at 85% -10%, #17224a 0%, transparent 55%),
+    radial-gradient(900px 500px at 10% 120%, #13233a 0%, transparent 55%),
+    var(--bg);
+}
+
+/* نفس الحاوية والعناصر الأصلية */
+.wrap{max-width:880px;margin:0 auto}
+
+/* العنوان الأصلي مع لمسة حديثة */
+h1{
+  margin:0 0 18px; font-size:22px; font-weight:650; letter-spacing:.2px;
+  color:#7df9ff; text-shadow:0 0 14px #00eaff55, 0 0 34px #00eaff22;
+}
+
+/* البطاقة الأصلية */
+.card{
+  background:linear-gradient(180deg, #0f1730, #0d1425);
+  border:1px solid var(--bdr);
+  border-radius:var(--radius);
+  padding:16px;
+  box-shadow:var(--shadow);
+  position:relative; overflow:hidden;
+}
+/* خطوط ماسح خفيفة */
+.card::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.04) 3px);
+  mix-blend-mode:overlay;
+}
+
+/* صفوف الأدوات كما هي */
+.row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+
+/* المدخلات الأصلية */
+input,button{font-size:14px}
+input[type=text]{
+  background:#0b1324; color:var(--ink);
+  border:1px solid #203455; border-radius:10px; padding:10px 12px; min-width:200px;
+  transition:border-color .15s, box-shadow .15s, background .15s;
+}
+input[type=text]::placeholder{color:#95a9c7}
+input[type=text]:focus{
+  outline:none; border-color:#52dfff;
+  box-shadow:0 0 0 3px #52dfff2e; background:#0e1a33;
+}
+
+/* الأزرار الأصلية */
+button{
+  border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:650;
+  color:#eef7ff;
+  background:linear-gradient(180deg, var(--accent), var(--accent2));
+  box-shadow:0 6px 24px rgba(0,0,0,.35), 0 0 0 1px #233c68 inset;
+  transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
+}
+button:hover{ filter:brightness(1.07); transform:translateY(-1px); }
+button:active{ transform:translateY(0); }
+button.gray{
+  background:#394a63; color:#d9e7ff; box-shadow:0 6px 24px rgba(0,0,0,.3), 0 0 0 1px #263c63 inset;
+}
+button.danger{
+  background:linear-gradient(180deg,#d53044,#981c2c); color:#fff;
+}
+
+/* الجدول الأصلي */
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{border-bottom:1px solid #1f2b42;padding:12px 10px;text-align:left}
+th{color:var(--muted);font-weight:600}
+tbody tr:hover{background:#101a32}
+
+/* الشارات الأصلية */
+.badge{
+  display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:650;
+  border:1px solid #1d364f;
+}
+.ok{background:#053c30;color:var(--ok);border-color:#0b5444}
+.off{background:#3a1020;color:#ff9aa9;border-color:#5c1c30}
+
+/* التلميح الأصلي */
+.hint{color:#90a7c7;font-size:12px;margin-top:8px}
+
+/* محاذاة حقل السر كما كان */
+.secret{margin-left:auto}
+
+/* تحسين بسيط للكود */
+code{color:#9ff2ff}
 </style>
 <div class="wrap">
   <h1>MILANO Check – Token Admin</h1>
@@ -182,6 +264,7 @@ app.get("/admin", (_req, res) => {
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.send(html);
 });
+
 
 /* ====== REST API للتوكنات (محمي بالـ Admin secret) ====== */
 app.get("/api/tokens", requireAdmin, (_req, res) => {
