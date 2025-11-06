@@ -79,321 +79,109 @@ function requireAdmin(req, res, next) {
 }
 
 /* ====== صفحة إدارة على /admin ====== */
-// بدّل بلوك /admin الحالي كله بهذا:
 app.get("/admin", (_req, res) => {
   const html = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>MILANO Control • Admin</title>
-
+<meta charset="utf-8"><title>MILANO Check – Token Admin</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-/* ====== Cyber Minimal (بدون تغيير HTML/JS) ====== */
-:root{
-  --bg:#070b14; --card:#0c1222; --border:#1a2947; --ink:#dfe7ff;
-  --muted:#9fb3d9; --primary:#66e7ff; --ok:#00e6b8; --danger:#ff3b66;
-}
-*{box-sizing:border-box} html,body{height:100%}
-body{
-  margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
-  color:var(--ink);
-  background:
-    radial-gradient(1000px 600px at 85% -10%, #17224a 0%, transparent 50%),
-    radial-gradient(900px 500px at 10% 120%, #14233a 0%, transparent 50%),
-    var(--bg);
-}
-
-/* الحاوية والعناوين (لا تغيّر أسماء العناصر الأصلية) */
-.wrap{max-width:960px;margin:32px auto;padding:0 16px}
-h1{margin:0 0 16px;font-size:22px;letter-spacing:.3px;color:var(--primary);
-   text-shadow:0 0 10px color-mix(in oklab, var(--primary) 50%, transparent)}
-
-/* البطاقة الأصلية */
-.card{
-  background:linear-gradient(180deg, #0e152b, #0c1222);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:16px;
-  box-shadow:0 8px 40px rgba(0,0,0,.35);
-}
-
-/* صفوف الأدوات */
-.row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
-
-/* الحقول والأزرار (نفس العناصر الأصلية) */
-input,button{font-size:14px}
-input[type=text]{
-  background:#0b1326; color:var(--ink);
-  border:1px solid var(--border); border-radius:10px; padding:10px 12px; min-width:200px;
-  transition:border-color .15s, box-shadow .15s;
-}
-input[type=text]::placeholder{color:var(--muted)}
-input[type=text]:focus{
-  outline:none; border-color:color-mix(in oklab, var(--primary) 65%, #223a63 35%);
-  box-shadow:0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent);
-}
-
-/* أزرار (تحافظ على نفس أسماء الأصناف الأصلية) */
-button{
-  border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600;
-  background:linear-gradient(180deg, #1a3a88, #0f2f74); color:#eaf4ff;
-  box-shadow:0 0 0 1px #223a63 inset, 0 6px 20px rgba(0,0,0,.25);
-  transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
-}
-button:hover{filter:brightness(1.05); transform:translateY(-1px)}
-button:active{transform:translateY(0)}
-button.gray{background:#14213a;color:#cfe3ff; box-shadow:0 0 0 1px #223a63 inset}
-button.danger{background:linear-gradient(180deg,#b3123b,#7d0f2b); color:#fff}
-
-/* جدول نفس المعرفات الأصلية */
-table{width:100%;border-collapse:collapse;margin-top:12px}
-th,td{border-bottom:1px solid #15223d;padding:12px 10px;text-align:left}
-th{color:var(--muted);font-weight:600}
-tbody tr:hover{background:#0f1730}
-
-/* الشارات الأصلية */
-.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid #1d364f}
-.ok{background:#062a21;color:var(--ok);border-color:#0b5444}
-.off{background:#2a0e16;color:#ff9aa9;border-color:#541b2a}
-
-/* تلميح */
-.hint{color:#90a7cc;font-size:12px;margin-top:8px}
-
-/* حقل السر الأصلي */
-.secret{margin-left:auto}
-
-/* خطوط ماسح خفيفة للبطاقة (زينة فقط) */
-.card::after{
-  content:""; position:absolute; inset:0; border-radius:14px; pointer-events:none;
-  background:repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.03) 3px);
-  mix-blend-mode:overlay; border-radius:inherit;
-}
-.card{position:relative; overflow:hidden}
-
-/* توافق مظاهر صغيرة */
-code{color:#9ff2ff}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1320;color:#e5e7eb;margin:0;padding:24px;}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{margin:0 0 16px;font-size:22px}
+  .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+  input,button{font-size:14px}
+  input[type=text]{background:#0b1220;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:10px 12px;min-width:200px}
+  button{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;color:#fff;background:#2563eb}
+  button.danger{background:#dc2626}
+  button.gray{background:#6b7280}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border-bottom:1px solid #1f2937;padding:10px;text-align:left;font-size:13px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
+  .ok{background:#065f46}
+  .off{background:#7c2d12}
+  .hint{color:#9ca3af;font-size:12px;margin-top:10px}
+  .secret{margin-left:auto}
 </style>
-
-</head>
-
-<body>
-  <div class="nav">
-    <div class="container" style="display:flex;justify-content:space-between;align-items:center;">
-      <div class="brand"><div class="logo"></div><h1>MILANO • Tokens Admin</h1></div>
-      <div class="kv">
-        <div>Clients</div><div class="mono" id="clients_count">—</div>
-        <div>Room Key</div><div class="mono" id="room_key">origin||token</div>
-      </div>
+<div class="wrap">
+  <h1>MILANO Check – Token Admin</h1>
+  <div class="card">
+    <div class="row">
+      <input id="secret" type="text" placeholder="Admin secret (required)" class="secret">
+      <button id="refresh">Refresh</button>
     </div>
+    <div class="row">
+      <input id="token_value" type="text" placeholder="token value (e.g. alpha123)">
+      <input id="token_label" type="text" placeholder="label (optional)">
+      <button id="add">Add Token</button>
+    </div>
+    <div class="hint">العميل يجب أن يرسل هذا التوكن للانضمام. الحذف/التعطيل فوري.</div>
+    <table id="tbl">
+      <thead><tr><th>Token</th><th>Label</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
   </div>
-
-  <div class="container grid">
-    <!-- Left: controls -->
-    <section class="card scan">
-      <div class="form">
-        <h3 style="margin:0 0 10px">Access</h3>
-        <div class="row">
-          <input id="secret" class="input" placeholder="Admin secret (x-admin-secret)" />
-          <button id="btn_check" class="btn secondary">Check Access</button>
-        </div>
-
-        <h3 style="margin:16px 0 10px">Add / Generate Token</h3>
-        <div class="row">
-          <input id="token_value" class="input" placeholder="Token value (e.g. alpha123)" />
-          <input id="token_label" class="input" placeholder="Label (optional)" />
-        </div>
-        <div class="toolbar">
-          <button id="btn_add" class="btn">Add Token</button>
-          <button id="btn_gen" class="btn ghost">Generate</button>
-          <button id="btn_export" class="btn ghost">Export JSON</button>
-          <label class="btn ghost" style="position:relative;overflow:hidden">
-            Import JSON <input id="file_import" type="file" accept="application/json" style="position:absolute;inset:0;opacity:0;cursor:pointer" />
-          </label>
-        </div>
-
-        <h3 style="margin:16px 0 10px">Search & Filters</h3>
-        <div class="searchbar">
-          <input id="q" class="input" placeholder="Search tokens/labels…" />
-          <select id="filter_state" class="input">
-            <option value="all">All</option>
-            <option value="enabled">Enabled</option>
-            <option value="disabled">Disabled</option>
-          </select>
-          <button id="btn_refresh" class="btn secondary">Refresh</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Right: table -->
-    <section class="card scan">
-      <div class="table">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:32%">Token</th>
-              <th style="width:26%">Label</th>
-              <th style="width:14%">Status</th>
-              <th style="width:18%">Created</th>
-              <th style="width:10%">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
+</div>
 <script>
-/* ===== helpers ===== */
-const $ = (s, r=document)=>r.querySelector(s);
-const $$= (s, r=document)=>Array.from(r.querySelectorAll(s));
-const toast = (msg, ok=true)=>{
-  const el=$("#toast");
-  el.className = "toast " + (ok?"ok":"err");
-  el.textContent = msg;
-  requestAnimationFrame(()=>{ el.classList.add("show"); });
-  setTimeout(()=>el.classList.remove("show"), 1800);
-};
+  const $ = (s)=>document.querySelector(s);
+  $("#secret").value = localStorage.getItem("ADMIN_SECRET") || "";
 
-const secretEl = $("#secret");
-secretEl.value = localStorage.getItem("ADMIN_SECRET") || "";
-function hdrs(){
-  const sec = secretEl.value.trim();
-  if(!sec){ toast("Secret required", false); throw new Error("no secret"); }
-  localStorage.setItem("ADMIN_SECRET", sec);
-  return { "content-type": "application/json", "x-admin-secret": sec };
-}
+  function hdrs(){
+    const h = {"Content-Type":"application/json"};
+    const sec = $("#secret").value.trim();
+    if(!sec){ alert("Admin secret is required"); throw new Error("no secret"); }
+    h["x-admin-secret"] = sec;
+    localStorage.setItem("ADMIN_SECRET", sec);
+    return h;
+  }
 
-/* ===== state ===== */
-let TOKENS = [];
-let FILTER = { q:"", state:"all" };
+  async function load(){
+    const r = await fetch("/api/tokens",{headers:hdrs()});
+    const j = await r.json();
+    const tbody = $("#tbl tbody");
+    tbody.innerHTML = "";
+    (j.tokens||[]).forEach(t=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = \`
+        <td><code>\${t.value}</code></td>
+        <td>\${t.label||""}</td>
+        <td>\${t.enabled ? '<span class="badge ok">enabled</span>' : '<span class="badge off">disabled</span>'}</td>
+        <td>\${new Date(t.createdAt).toLocaleString()}</td>
+        <td>
+          <button class="gray" data-act="toggle" data-v="\${t.value}">\${t.enabled?'Disable':'Enable'}</button>
+          <button class="danger" data-act="del" data-v="\${t.value}">Delete</button>
+        </td>\`;
+      tbody.appendChild(tr);
+    });
+  }
 
-function render(){
-  const tbody = $("#tbody");
-  const q = FILTER.q.toLowerCase();
-  const s = FILTER.state;
-
-  const items = TOKENS.filter(t=>{
-    const okState = (s==="all") || (s==="enabled" && t.enabled) || (s==="disabled" && !t.enabled);
-    const okQ = !q || (t.value.toLowerCase().includes(q) || (t.label||"").toLowerCase().includes(q));
-    return okState && okQ;
-  });
-
-  tbody.innerHTML = items.map(t => (
-  '<tr>'
-+   '<td><code>' + escapeHtml(t.value) + '</code></td>'
-+   '<td>' + escapeHtml(t.label || '') + '</td>'
-+   '<td>' + (t.enabled
-+       ? '<span class="pill ok">ENABLED</span>'
-+       : '<span class="pill off">DISABLED</span>') + '</td>'
-+   '<td>' + new Date(t.createdAt).toLocaleString() + '</td>'
-+   '<td>'
-+     + '<button class="btn secondary btn-sm" data-act="toggle" data-v="'
-+     + encodeURIComponent(t.value) + '">'
-+     + (t.enabled ? 'Disable' : 'Enable') + '</button> '
-+     + '<button class="btn danger btn-sm" data-act="del" data-v="'
-+     + encodeURIComponent(t.value) + '">Del</button>'
-+   + '</td>'
-+ '</tr>'
-)).join('');
-
-
-
-  $("#clients_count").textContent = "—"; // احتياطي (يمكن وصلها لاحقًا بـ /debug/rooms)
-}
-
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
-
-/* ===== io ===== */
-async function loadTokens(){
-  const r = await fetch("/api/tokens",{headers: hdrs()});
-  if(!r.ok){ toast("Unauthorized /api/tokens", false); return; }
-  const j = await r.json();
-  TOKENS = j.tokens || [];
-  render();
-}
-
-async function addToken(){
-  const value = $("#token_value").value.trim();
-  const label = $("#token_label").value.trim();
-  if(!value){ toast("Enter token value", false); return; }
-  const r = await fetch("/api/tokens",{method:"POST",headers:hdrs(),body:JSON.stringify({value,label})});
-  if(r.ok){ toast("Token added"); $("#token_value").value=""; $("#token_label").value=""; loadTokens(); }
-  else toast("Add failed", false);
-}
-
-async function patchToggle(val){
-  const r = await fetch("/api/tokens/"+val,{method:"PATCH",headers:hdrs(),body:JSON.stringify({toggle:true})});
-  if(r.ok){ toast("Updated"); loadTokens(); } else toast("Update failed", false);
-}
-
-async function delToken(val){
-  if(!confirm("Delete token?")) return;
-  const r = await fetch("/api/tokens/"+val,{method:"DELETE",headers:hdrs()});
-  if(r.ok){ toast("Deleted"); loadTokens(); } else toast("Delete failed", false);
-}
-
-/* ===== events ===== */
-$("#btn_refresh").onclick = loadTokens;
-$("#btn_check").onclick  = loadTokens;
-$("#btn_add").onclick    = addToken;
-$("#btn_gen").onclick    = ()=>{
-  const v = "tok_" + Math.random().toString(36).slice(2,8) + Math.random().toString(36).slice(2,6);
-  $("#token_value").value = v;
-  toast("Generated");
-};
-$("#file_import").onchange = async (e)=>{
-  const f = e.target.files?.[0]; if(!f) return;
-  const txt = await f.text();
-  try{
-    const arr = JSON.parse(txt);
-    if(!Array.isArray(arr)) throw new Error("Invalid JSON");
-    for(const t of arr){
-      if(!t?.value) continue;
-      await fetch("/api/tokens",{method:"POST",headers:hdrs(),body:JSON.stringify({value:t.value,label:t.label})});
+  $("#refresh").onclick = load;
+  $("#add").onclick = async ()=>{
+    const value = $("#token_value").value.trim();
+    const label = $("#token_label").value.trim();
+    if(!value){ alert("token value required"); return; }
+    await fetch("/api/tokens",{method:"POST",headers:hdrs(),body:JSON.stringify({value,label})});
+    $("#token_value").value=""; $("#token_label").value="";
+    load();
+  };
+  $("#tbl").onclick = async (e)=>{
+    const btn = e.target.closest("button"); if(!btn) return;
+    const val = btn.getAttribute("data-v");
+    const act = btn.getAttribute("data-act");
+    if(act==="del"){
+      if(!confirm("Delete token "+val+" ?")) return;
+      await fetch("/api/tokens/"+encodeURIComponent(val),{method:"DELETE",headers:hdrs()});
+      load();
+    }else if(act==="toggle"){
+      await fetch("/api/tokens/"+encodeURIComponent(val),{method:"PATCH",headers:hdrs(),body:JSON.stringify({toggle:true})});
+      load();
     }
-    toast("Imported"); loadTokens();
-  }catch(_){ toast("Import failed", false); }
-};
+  };
 
-$("#q").oninput = e=>{ FILTER.q = e.target.value; render(); };
-$("#filter_state").onchange = e=>{ FILTER.state = e.target.value; render(); };
-
-$("#tbody").onclick = (e)=>{
-  const b = e.target.closest("button"); if(!b) return;
-  const act = b.dataset.act;
-  const v   = b.dataset.v;
-  if(act==="toggle") patchToggle(v);
-  if(act==="del")    delToken(v);
-};
-
-/* hotkeys:  Ctrl+K focus search,  Ctrl+Enter add */
-document.addEventListener("keydown",(e)=>{
-  if(e.ctrlKey && e.key.toLowerCase()==="k"){ e.preventDefault(); $("#q").focus(); }
-  if(e.ctrlKey && e.key==="Enter"){ e.preventDefault(); addToken(); }
-});
-
-/* show room key hint (front-end only hint) */
-(function showRoomHint(){
-  try {
-    const origin = location.origin; // admin panel origin (for مرجع فقط)
-    const token  = "(client token)";
-    $("#room_key").textContent = origin + "||" + token;
-  } catch {}
-})();
-
-/* init */
-loadTokens();
-</script>
-</body>
-</html>`;
-  res.setHeader("content-type","text/html; charset=utf-8");
+  load();
+</script>`;
+  res.setHeader("content-type", "text/html; charset=utf-8");
   res.send(html);
 });
-
 
 /* ====== REST API للتوكنات (محمي بالـ Admin secret) ====== */
 app.get("/api/tokens", requireAdmin, (_req, res) => {
