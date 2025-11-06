@@ -296,17 +296,25 @@ function render(){
     return okState && okQ;
   });
 
-  tbody.innerHTML = items.map(t => `
-    <tr>
-      <td><code>${escapeHtml(t.value)}</code></td>
-      <td>${escapeHtml(t.label||"")}</td>
-      <td>${t.enabled?'<span class="pill ok">ENABLED</span>':'<span class="pill off">DISABLED</span>'}</td>
-      <td>${new Date(t.createdAt).toLocaleString()}</td>
-      <td>
-        <button class="btn secondary btn-sm" data-act="toggle" data-v="${encodeURIComponent(t.value)}">${t.enabled?'Disable':'Enable'}</button>
-        <button class="btn danger btn-sm" data-act="del" data-v="${encodeURIComponent(t.value)}">Del</button>
-      </td>
-    </tr>`).join("");
+  tbody.innerHTML = items.map(t => (
+  '<tr>'
++   '<td><code>' + escapeHtml(t.value) + '</code></td>'
++   '<td>' + escapeHtml(t.label || '') + '</td>'
++   '<td>' + (t.enabled
++       ? '<span class="pill ok">ENABLED</span>'
++       : '<span class="pill off">DISABLED</span>') + '</td>'
++   '<td>' + new Date(t.createdAt).toLocaleString() + '</td>'
++   '<td>'
++     + '<button class="btn secondary btn-sm" data-act="toggle" data-v="'
++     + encodeURIComponent(t.value) + '">'
++     + (t.enabled ? 'Disable' : 'Enable') + '</button> '
++     + '<button class="btn danger btn-sm" data-act="del" data-v="'
++     + encodeURIComponent(t.value) + '">Del</button>'
++   + '</td>'
++ '</tr>'
+)).join('');
+
+
 
   $("#clients_count").textContent = "—"; // احتياطي (يمكن وصلها لاحقًا بـ /debug/rooms)
 }
