@@ -81,107 +81,201 @@ function requireAdmin(req, res, next) {
 /* ====== صفحة إدارة على /admin ====== */
 app.get("/admin", (_req, res) => {
   const html = `<!doctype html>
-<meta charset="utf-8"><title>MILANO Check – Token Admin</title>
+<meta charset="utf-8">
+<title>MILANO CYBER 2090 – Control Panel</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+
 <style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1320;color:#e5e7eb;margin:0;padding:24px;}
-  .wrap{max-width:880px;margin:0 auto}
-  h1{margin:0 0 16px;font-size:22px}
-  .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
-  .row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
-  input,button{font-size:14px}
-  input[type=text]{background:#0b1220;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:10px 12px;min-width:200px}
-  button{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;color:#fff;background:#2563eb}
-  button.danger{background:#dc2626}
-  button.gray{background:#6b7280}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  th,td{border-bottom:1px solid #1f2937;padding:10px;text-align:left;font-size:13px}
-  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
-  .ok{background:#065f46}
-  .off{background:#7c2d12}
-  .hint{color:#9ca3af;font-size:12px;margin-top:10px}
-  .secret{margin-left:auto}
+body {
+  margin:0;
+  font-family: 'Consolas', monospace;
+  background: #050010;
+  color: #00f6ff;
+  height:100vh;
+  overflow-x:hidden;
+}
+
+/* Cyber grid background */
+body::before {
+  content:"";
+  position:fixed;
+  inset:0;
+  background:
+    linear-gradient(#00f6ff22 1px, transparent 1px),
+    linear-gradient(90deg, #00f6ff22 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index:-1;
+  animation: gridmove 12s linear infinite;
+}
+
+@keyframes gridmove {
+  from {background-position: 0 0,0 0;}
+  to {background-position: 0 40px,40px 0;}
+}
+
+h1 {
+  text-align:center;
+  font-size:28px;
+  color:#00f6ff;
+  text-shadow:0 0 12px #00eaff,0 0 25px #008aff;
+  margin-top:25px;
+}
+
+/* Glass panel */
+.panel {
+  max-width:900px;
+  margin:40px auto;
+  padding:20px;
+  background:rgba(0,255,255,0.06);
+  border:1px solid #00f6ff55;
+  border-radius:14px;
+  backdrop-filter:blur(8px);
+  box-shadow:0 0 22px #00baff66;
+}
+
+/* Inputs + Buttons */
+input,button {
+  font-family:inherit;
+  font-size:14px;
+  padding:10px 12px;
+  border-radius:6px;
+}
+
+input {
+  border:1px solid #00f6ff77;
+  background:#02161a;
+  color:#00f6ff;
+  min-width:200px;
+}
+input:focus {outline:none; box-shadow:0 0 10px #00f6ff;}
+
+button {
+  background:#00d9ff;
+  border:none;
+  color:#00141a;
+  cursor:pointer;
+  font-weight:bold;
+  text-transform:uppercase;
+  box-shadow:0 0 12px #00f6ff88;
+  transition:0.2s;
+}
+button:hover {
+  box-shadow:0 0 18px #00f6ff,0 0 50px #00f6ff;
+  transform:scale(1.04);
+}
+
+button.danger {background:#ff003b;}
+button.gray {background:#363f47;color:#d7ecff;}
+
+/* Table */
+table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:16px;
+}
+th,td {
+  padding:10px;
+  border-bottom:1px solid #00f6ff33;
+}
+code {color:#74faff;}
+
+.badge {
+  padding:3px 10px;
+  border-radius:20px;
+  font-size:12px;
+}
+.ok {background:#00ffea33;color:#00f6ff;}
+.off{background:#ff003033;color:#ff4b4b;}
 </style>
-<div class="wrap">
-  <h1>MILANO Check – Token Admin</h1>
-  <div class="card">
-    <div class="row">
-      <input id="secret" type="text" placeholder="Admin secret (required)" class="secret">
-      <button id="refresh">Refresh</button>
-    </div>
-    <div class="row">
-      <input id="token_value" type="text" placeholder="token value (e.g. alpha123)">
-      <input id="token_label" type="text" placeholder="label (optional)">
-      <button id="add">Add Token</button>
-    </div>
-    <div class="hint">العميل يجب أن يرسل هذا التوكن للانضمام. الحذف/التعطيل فوري.</div>
-    <table id="tbl">
-      <thead><tr><th>Token</th><th>Label</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-      <tbody></tbody>
-    </table>
+
+<h1>MILANO CYBER 2090 – TOKENS CONTROL CENTER</h1>
+<div class="panel">
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+    <input id="secret" type="text" placeholder="Admin secret">
+    <button id="refresh">Refresh</button>
   </div>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+    <input id="token_value" type="text" placeholder="Token Value">
+    <input id="token_label" type="text" placeholder="Label (optional)">
+    <button id="add">Add Token</button>
+  </div>
+
+  <table id="tbl">
+    <thead>
+      <tr><th>Token</th><th>Label</th><th>Status</th><th>Created</th><th>Actions</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
 </div>
+
 <script>
-  const $ = (s)=>document.querySelector(s);
-  $("#secret").value = localStorage.getItem("ADMIN_SECRET") || "";
+const $ = (s)=>document.querySelector(s);
+$("#secret").value = localStorage.getItem("ADMIN_SECRET") || "";
 
-  function hdrs(){
-    const h = {"Content-Type":"application/json"};
-    const sec = $("#secret").value.trim();
-    if(!sec){ alert("Admin secret is required"); throw new Error("no secret"); }
-    h["x-admin-secret"] = sec;
-    localStorage.setItem("ADMIN_SECRET", sec);
-    return h;
-  }
+function hdrs(){
+  const h={ "Content-Type":"application/json" };
+  const sec=$("#secret").value.trim();
+  if(!sec){alert("Admin secret required");throw new Error("no secret");}
+  h["x-admin-secret"]=sec;
+  localStorage.setItem("ADMIN_SECRET",sec);
+  return h;
+}
 
-  async function load(){
-    const r = await fetch("/api/tokens",{headers:hdrs()});
-    const j = await r.json();
-    const tbody = $("#tbl tbody");
-    tbody.innerHTML = "";
-    (j.tokens||[]).forEach(t=>{
-      const tr = document.createElement("tr");
-      tr.innerHTML = \`
-        <td><code>\${t.value}</code></td>
-        <td>\${t.label||""}</td>
-        <td>\${t.enabled ? '<span class="badge ok">enabled</span>' : '<span class="badge off">disabled</span>'}</td>
-        <td>\${new Date(t.createdAt).toLocaleString()}</td>
-        <td>
-          <button class="gray" data-act="toggle" data-v="\${t.value}">\${t.enabled?'Disable':'Enable'}</button>
-          <button class="danger" data-act="del" data-v="\${t.value}">Delete</button>
-        </td>\`;
-      tbody.appendChild(tr);
-    });
-  }
+async function load(){
+  const r=await fetch("/api/tokens",{headers:hdrs()});
+  const j=await r.json();
+  const tbody=$("#tbl tbody");
+  tbody.innerHTML="";
+  (j.tokens||[]).forEach(t=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=\`
+      <td><code>\${t.value}</code></td>
+      <td>\${t.label||""}</td>
+      <td>\${t.enabled?'<span class="badge ok">ENABLED</span>':'<span class="badge off">DISABLED</span>'}</td>
+      <td>\${new Date(t.createdAt).toLocaleString()}</td>
+      <td>
+        <button class="gray" data-act="toggle" data-v="\${t.value}">\${t.enabled?'Disable':'Enable'}</button>
+        <button class="danger" data-act="del" data-v="\${t.value}">Delete</button>
+      </td>\`;
+    tbody.appendChild(tr);
+  });
+}
 
-  $("#refresh").onclick = load;
-  $("#add").onclick = async ()=>{
-    const value = $("#token_value").value.trim();
-    const label = $("#token_label").value.trim();
-    if(!value){ alert("token value required"); return; }
-    await fetch("/api/tokens",{method:"POST",headers:hdrs(),body:JSON.stringify({value,label})});
-    $("#token_value").value=""; $("#token_label").value="";
-    load();
-  };
-  $("#tbl").onclick = async (e)=>{
-    const btn = e.target.closest("button"); if(!btn) return;
-    const val = btn.getAttribute("data-v");
-    const act = btn.getAttribute("data-act");
-    if(act==="del"){
-      if(!confirm("Delete token "+val+" ?")) return;
-      await fetch("/api/tokens/"+encodeURIComponent(val),{method:"DELETE",headers:hdrs()});
-      load();
-    }else if(act==="toggle"){
-      await fetch("/api/tokens/"+encodeURIComponent(val),{method:"PATCH",headers:hdrs(),body:JSON.stringify({toggle:true})});
-      load();
-    }
-  };
-
+$("#refresh").onclick = load;
+$("#add").onclick = async ()=>{
+  const value=$("#token_value").value.trim();
+  const label=$("#token_label").value.trim();
+  if(!value){alert("Token value required");return;}
+  await fetch("/api/tokens",{method:"POST",headers:hdrs(),body:JSON.stringify({value,label})});
+  $("#token_value").value="";$("#token_label").value="";
   load();
-</script>`;
-  res.setHeader("content-type", "text/html; charset=utf-8");
+};
+
+$("#tbl").onclick=async(e)=>{
+  const btn=e.target.closest("button");
+  if(!btn) return;
+  const val=btn.dataset.v;
+  const act=btn.dataset.act;
+  if(act==="del"){
+    if(!confirm("Delete token "+val+" ?"))return;
+    await fetch("/api/tokens/"+encodeURIComponent(val),{method:"DELETE",headers:hdrs()});
+    load();
+  } else {
+    await fetch("/api/tokens/"+encodeURIComponent(val),{method:"PATCH",headers:hdrs(),body:JSON.stringify({toggle:true})});
+    load();
+  }
+};
+
+load();
+</script>
+`;
+  res.setHeader("content-type","text/html; charset=utf-8");
   res.send(html);
 });
+
 
 /* ====== REST API للتوكنات (محمي بالـ Admin secret) ====== */
 app.get("/api/tokens", requireAdmin, (_req, res) => {
